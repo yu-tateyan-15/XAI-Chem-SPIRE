@@ -48,4 +48,4 @@ If you use SPIRE or this code in your research, please cite the accompanying man
 
 > Yusuke Tateishi, Junwei Shen, Masayoshi Aritsugi, and Shinichiro Nakamura. *Physicochemical Interpretation of Atom Contributions to Molecular Property Predictions*. Unpublished manuscript.
 
-Publication details and DOI will be added when available.
+DOI: *** (to be assigned).
