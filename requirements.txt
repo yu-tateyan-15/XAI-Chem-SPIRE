@@ -1,0 +1,13 @@
+# Python >=3.11; CheMeleon uses Chemprop 2.2.0.
+chemprop==2.2.0
+torch>=2.4,<3
+torch-geometric>=2.7,<3
+numpy>=1.26,<3
+pandas>=2.2,<3
+scipy>=1.13
+scikit-learn>=1.5
+rdkit>=2024.9
+matplotlib>=3.8
+Pillow
+papermill>=2.6,<3
+ipykernel>=6
