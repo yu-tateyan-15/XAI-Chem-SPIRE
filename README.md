@@ -10,19 +10,19 @@ Atom-contribution regularization and physicochemical reconstruction for molecula
 
 ## Core study: SGLT2
 
-| Notebook | Purpose |
-|---|---|
-| [01_training.ipynb](notebooks_for_sglt2/01_training.ipynb) | SGLT2 model training and AC regularization |
-| [02_reconstruction.ipynb](notebooks_for_sglt2/02_reconstruction.ipynb) | In-sample reconstruction of SGLT2 ACs from physicochemical descriptors |
+| Executed notebook | Purpose | Data source |
+|---|---|---|
+| [Training R](notebooks_for_sglt2/output/executed_notebooks/01_training_R_executed.ipynb) · [U](notebooks_for_sglt2/output/executed_notebooks/01_training_U_executed.ipynb) | SGLT2 model training and AC regularization | [ChEMBL 37](https://www.ebi.ac.uk/chembl/), CHEMBL3884 |
+| [Reference reconstruction](notebooks_for_sglt2/output/executed_notebooks/02_reconstruction_executed.ipynb) | In-sample reconstruction of reference R ACs | [This study](sglt2_data/README.md): reference ACs and computed descriptors |
 
 ## Independent test samples
 
-| Notebook | Purpose |
-|---|---|
-| [freesolv.ipynb](test_sample/freesolv.ipynb) | Hydration free-energy validation example |
-| [ld50_toxicity.ipynb](test_sample/ld50_toxicity.ipynb) | Acute oral toxicity validation example |
-| [lipophilicity.ipynb](test_sample/lipophilicity.ipynb) | Lipophilicity (logD) validation example |
-| [caco2.ipynb](test_sample/caco2.ipynb) | Caco-2 permeability validation example |
-| [mayr_dcm.ipynb](test_sample/mayr_dcm.ipynb) | Mayr nucleophilicity in DCM validation example |
+| Executed notebook | Purpose | Data source |
+|---|---|---|
+| [FreeSolv](test_sample/output/executed_notebooks/freesolv_executed.ipynb) | Hydration free-energy validation | [FreeSolv v0.52](https://github.com/MobleyLab/FreeSolv) |
+| [LD50](test_sample/output/executed_notebooks/ld50_toxicity_executed.ipynb) | Acute oral toxicity validation | [TDC / Zhu et al.](https://tdcommons.ai/single_pred_tasks/tox/#acute-toxicity-ld50) |
+| [Lipophilicity](test_sample/output/executed_notebooks/lipophilicity_executed.ipynb) | logD validation | [TDC / AstraZeneca](https://tdcommons.ai/single_pred_tasks/adme/#lipophilicity-astrazeneca) |
+| [Caco-2](test_sample/output/executed_notebooks/caco2_executed.ipynb) | Permeability validation | [TDC / Wang et al.](https://tdcommons.ai/single_pred_tasks/adme/#caco-2-cell-effective-permeability-wang-et-al) |
+| [Mayr / DCM](test_sample/output/executed_notebooks/mayr_dcm_executed.ipynb) | Nucleophilicity validation | [BNNLab / Mayr](https://github.com/BNNLab/Nucleophilicity) |
 
 [Data sources and licenses](sglt2_data/README.md)
