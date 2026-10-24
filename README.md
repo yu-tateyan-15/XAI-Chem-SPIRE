@@ -8,34 +8,16 @@ Atom-contribution regularization and physicochemical reconstruction for molecula
   <img src="assets/graphical_abstract.png" width="480" alt="XAI in Chemistry: atom-level evidence to physicochemical interpretation">
 </p>
 
-## Setup
-
-Python 3.11+. Run from the repository root.
-
-```bash
-python -m pip install -r requirements.txt
-export XAI_CHEM_ROOT="$PWD"
-```
-
-Training also requires the pretrained CheMeleon encoder:
-
-```bash
-mkdir -p checkpoints
-curl -L --fail https://zenodo.org/records/15460715/files/chemeleon_mp.pt \
-  -o checkpoints/chemeleon_mp.pt
-```
-
 ## Notebooks
-
-Open a notebook with the Python environment above and run its cells in order.
 
 | Notebook | Purpose |
 |---|---|
-| [01_training](notebooks_for_sglt2/01_training.ipynb) | SGLT2 training with (R) or without (U) AC regularization |
-| [02_reconstruction](notebooks_for_sglt2/02_reconstruction.ipynb) | In-sample descriptor reconstruction; runs independently using bundled ACs, without encoder weights |
-| [test_sample](test_sample/) | Independent FreeSolv, LD50, Lipophilicity, Caco-2 and Mayr/DCM examples; encoder required |
+| [01_training.ipynb](notebooks_for_sglt2/01_training.ipynb) | SGLT2 model training and AC regularization |
+| [02_reconstruction.ipynb](notebooks_for_sglt2/02_reconstruction.ipynb) | In-sample reconstruction of SGLT2 ACs from physicochemical descriptors |
+| [freesolv.ipynb](test_sample/freesolv.ipynb) | Hydration free-energy validation example |
+| [ld50_toxicity.ipynb](test_sample/ld50_toxicity.ipynb) | Acute oral toxicity validation example |
+| [lipophilicity.ipynb](test_sample/lipophilicity.ipynb) | Lipophilicity (logD) validation example |
+| [caco2.ipynb](test_sample/caco2.ipynb) | Caco-2 permeability validation example |
+| [mayr_dcm.ipynb](test_sample/mayr_dcm.ipynb) | Mayr nucleophilicity in DCM validation example |
 
-In Notebook 01, select `configs/sglt2_R.json` or `configs/sglt2_U.json` with `CONFIG_PATH`.
-Results are saved under the corresponding notebook directory's `output/`.
-
-[Data sources and licenses](sglt2_data/README.md) · [Recorded dependency versions](requirements-tested.txt)
+[Data sources and licenses](sglt2_data/README.md)
