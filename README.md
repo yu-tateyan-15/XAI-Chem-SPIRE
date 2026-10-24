@@ -4,14 +4,11 @@
 
 Regularize **atom contributions (ACs)** and reconstruct them with physicochemical descriptors.
 
-```mermaid
-flowchart LR
-    A["Molecules"] --> B["Frozen CheMeleon<br/>Additive GNN: U / R"]
-    R["AC constraints: R only"] --> B
-    B --> C["Raw ACs"]
-    C --> D["MMP-local Ridge<br/>Descriptor effects"]
-    P["7 physicochemical descriptors"] --> D
-```
+<p align="center">
+  <img src="assets/graphical_abstract.png" width="480" alt="XAI in Chemistry: atom-level evidence to physicochemical interpretation">
+</p>
+
+*Conceptual overview from the manuscript: connecting atom-level evidence with physicochemical interpretation.*
 
 **U:** unregularized; **R:** regularized; **MMP:** matched molecular pair.
 R constrains core differences, changed-region agreement, fragment positivity and consistency.
