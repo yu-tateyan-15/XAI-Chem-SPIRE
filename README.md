@@ -8,12 +8,17 @@ Atom-contribution regularization and physicochemical reconstruction for molecula
   <img src="assets/graphical_abstract.png" width="480" alt="XAI in Chemistry: atom-level evidence to physicochemical interpretation">
 </p>
 
-## Notebooks
+## Core study: SGLT2
 
 | Notebook | Purpose |
 |---|---|
 | [01_training.ipynb](notebooks_for_sglt2/01_training.ipynb) | SGLT2 model training and AC regularization |
 | [02_reconstruction.ipynb](notebooks_for_sglt2/02_reconstruction.ipynb) | In-sample reconstruction of SGLT2 ACs from physicochemical descriptors |
+
+## Independent test samples
+
+| Notebook | Purpose |
+|---|---|
 | [freesolv.ipynb](test_sample/freesolv.ipynb) | Hydration free-energy validation example |
 | [ld50_toxicity.ipynb](test_sample/ld50_toxicity.ipynb) | Acute oral toxicity validation example |
 | [lipophilicity.ipynb](test_sample/lipophilicity.ipynb) | Lipophilicity (logD) validation example |
