@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 import matplotlib.pyplot as plt
-from matplotlib.colors import TwoSlopeNorm
+from matplotlib.colors import Normalize, TwoSlopeNorm
 import numpy as np
 import pandas as pd
 from rdkit import Chem
@@ -400,6 +400,7 @@ def plot_train_validation_yy(
     limits: tuple[float, float] | None = None,
     target_label: str = "pIC50",
     figsize: tuple[float, float] = (8.0, 8.0),
+    axis: Any | None = None,
 ) -> tuple[Any, pd.DataFrame]:
     """Plot the frozen-notebook train/validation Y–Y visual contract.
 
@@ -410,7 +411,11 @@ def plot_train_validation_yy(
 
     metrics = completed_split_metrics(results)
     lower, upper = _parity_limits(results.predictions, limits)
-    figure, axis = plt.subplots(figsize=figsize)
+    # A caller-supplied axis keeps the same plot style in a matched U/R layout.
+    if axis is None:
+        figure, axis = plt.subplots(figsize=figsize)
+    else:
+        figure = axis.figure
     style = {
         "train": {
             "color": "steelblue",
@@ -476,6 +481,7 @@ def plot_prediction_loss_curves(
     results: CompletedFoldResults,
     *,
     smooth_window: int = 7,
+    axis: Any | None = None,
 ) -> Any:
     """Plot comparable train/validation prediction MSE in scaled space."""
 
@@ -488,7 +494,10 @@ def plot_prediction_loss_curves(
     missing = sorted(required.difference(history.columns))
     if missing:
         raise ValueError(f"History lacks prediction-loss columns: {missing}")
-    figure, axis = plt.subplots(figsize=(9.0, 5.4))
+    if axis is None:
+        figure, axis = plt.subplots(figsize=(9.0, 5.4))
+    else:
+        figure = axis.figure
     epoch = history["epoch"].to_numpy(dtype=float)
     specifications = (
         (
@@ -774,12 +783,16 @@ def plot_atom_contribution_grid(
 
 def plot_reconstruction_yy(
     target: Sequence[float], prediction: Sequence[float], *, unit_label: str, title: str,
+    axis: Any | None = None,
 ) -> tuple[Any, pd.DataFrame]:
     """Use the project parity style for an explicitly in-sample surrogate fit."""
     scores = _regression_metrics(target, prediction)
     values = pd.DataFrame({"target_raw": target, "prediction_raw": prediction})
     lower, upper = _parity_limits(values, None)
-    figure, axis = plt.subplots(figsize=(8.0, 8.0))
+    if axis is None:
+        figure, axis = plt.subplots(figsize=(8.0, 8.0))
+    else:
+        figure = axis.figure
     axis.scatter(values["prediction_raw"], values["target_raw"], s=35,
                  color="steelblue", alpha=0.50,
                  label=f"In-sample: n = {scores['n']}, R² = {scores['r2_score_raw']:.3f}")
@@ -791,6 +804,134 @@ def plot_reconstruction_yy(
     axis.grid(True, alpha=0.30)
     figure.tight_layout()
     return figure, pd.DataFrame([scores])
+
+
+def plot_mmp_condition_comparison(
+    results_by_condition: Mapping[str, CompletedFoldResults],
+    *,
+    source_rows: Sequence[int],
+    symmetric_limit: float,
+    unit_label: str,
+) -> tuple[Any, pd.DataFrame, pd.DataFrame]:
+    """Compare U/R rows and A/B columns on one untransformed AC scale."""
+    # NOTE: caller supplies exactly two matched endpoints and conditions U/R.
+    figure, axes = plt.subplots(2, 2, figsize=(11.8, 8.4), layout="constrained")
+    molecule_rows, atom_rows = [], []
+    for row, condition in enumerate(("U", "R")):
+        for column, source_row in enumerate(source_rows):
+            record = render_atom_contribution_record(
+                results_by_condition[condition], source_row_index=int(source_row),
+                symmetric_limit=symmetric_limit, draw_atom_indices=False,
+            )
+            axis = axes[row, column]
+            axis.imshow(decode_and_trim_png(record["image"], white_threshold=0.996, pad_px=1))
+            axis.set_title(
+                f"{condition} · {'AB'[column]} · row {source_row}\n"
+                f"Pred: {record['prediction_raw']:.2f} | True: {record['target_raw']:.2f} | "
+                f"Err: {record['error_raw']:+.2f}", fontsize=10,
+            )
+            axis.axis("off")
+            molecule_rows.append({
+                "condition": condition, "source_row_index": int(source_row),
+                **{key: record[key] for key in (
+                    "prediction_raw", "target_raw", "error_raw", "affine_baseline_raw",
+                    "raw_contribution_sum", "additivity_residual_raw", "symmetric_limit",
+                    "color_saturated_atom_count",
+                )},
+                "atom_indices_displayed": False,
+            })
+            atom_rows.extend({"condition": condition, **atom} for atom in _atom_rows(record, side="AB"[column]))
+    figure.colorbar(
+        plt.cm.ScalarMappable(norm=TwoSlopeNorm(vmin=-symmetric_limit, vcenter=0, vmax=symmetric_limit), cmap="bwr"),
+        ax=axes.ravel().tolist(), shrink=0.82,
+        label=f"Raw AC ({unit_label}); separate affine baseline",
+    )
+    return figure, pd.DataFrame(molecule_rows), pd.DataFrame(atom_rows)
+
+
+def plot_pair_descriptor_maps(
+    results: CompletedFoldResults,
+    descriptors: pd.DataFrame,
+    fitted_atoms: pd.DataFrame,
+    *,
+    source_rows: Sequence[int],
+    top_descriptors: Sequence[str],
+    symmetric_limit: float,
+    unit_label: str,
+) -> tuple[Any, pd.DataFrame]:
+    """Show R ACs and two raw descriptors in a 2-molecule by 3-map panel.
+
+    Descriptor halos cover only the changed-region atoms used by the surrogate.
+    Each descriptor uses its full-dataset raw range for both molecules, with the
+    established gist_rainbow palette; raw values are never centered or rescaled.
+    """
+    # NOTE: caller supplies two endpoints and two descriptors, ordered by |B-A effect|.
+    descriptor_labels = {
+        "gasteiger_charge": "Gasteiger charge (e)",
+        "gasteiger_charge_square": "Gasteiger charge² (e²)",
+        "crippen_logp": "Crippen logP contribution",
+        "crippen_molar_refractivity": "Crippen molar refractivity",
+        "tpsa_A2": "TPSA contribution (Å²)",
+        "atomic_mass": "Atomic mass (Da)",
+        "total_hydrogens": "Attached H count",
+    }
+    figure, axes = plt.subplots(2, 3, figsize=(16, 9.2), layout="constrained")
+    audit = []
+    for row, source_row in enumerate(source_rows):
+        record = render_atom_contribution_record(
+            results, source_row_index=int(source_row), symmetric_limit=symmetric_limit,
+            draw_atom_indices=False,
+        )
+        axes[row, 0].imshow(decode_and_trim_png(record["image"], white_threshold=0.996, pad_px=1))
+        axes[row, 0].set_title(
+            f"R · {'AB'[row]} · row {source_row}\n"
+            f"Pred: {record['prediction_raw']:.2f} | True: {record['target_raw']:.2f} | "
+            f"Err: {record['error_raw']:+.2f}", fontsize=10,
+        )
+        for column, descriptor in enumerate(top_descriptors, start=1):
+            raw_min, raw_max = descriptors[descriptor].agg(["min", "max"])
+            normalizer = Normalize(vmin=raw_min, vmax=raw_max, clip=True)
+            rows = fitted_atoms.loc[fitted_atoms["graph_id"].eq(source_row)].sort_values("atom_idx")
+            values = rows.set_index("atom_idx")[descriptor]
+            cmap = plt.get_cmap("gist_rainbow")
+            # Same-radius atom halos reproduce the project's raw-descriptor style.
+            drawer = rdMolDraw2D.MolDraw2DCairo(620, 430)
+            options = drawer.drawOptions()
+            options.addAtomIndices = False
+            options.atomHighlightsAreCircles = True
+            options.fillHighlights = True
+            options.standardColoursForHighlightedAtoms = True
+            drawer.DrawMolecule(
+                record["molecule"], highlightAtoms=values.index.tolist(),
+                highlightAtomColors={int(i): tuple(cmap(normalizer(v))[:3]) for i, v in values.items()},
+                highlightAtomRadii={int(i): 0.32 for i in values.index},
+            )
+            drawer.FinishDrawing()
+            axes[row, column].imshow(decode_and_trim_png(drawer.GetDrawingText(), white_threshold=0.996, pad_px=1))
+            axes[row, column].set_title(f"{'AB'[row]} · {descriptor_labels[descriptor]}\nChanged-region atoms only", fontsize=10)
+            audit.extend({
+                "source_row_index": int(source_row), "descriptor": descriptor,
+                "atom_idx": int(i), "raw_value": float(value),
+                "global_raw_min": float(raw_min), "global_raw_max": float(raw_max),
+                "scale_scope": "all_dataset_atoms", "atom_indices_displayed": False,
+                "raw_values_transformed": False,
+                "color_saturated": bool(value < raw_min or value > raw_max),
+            } for i, value in values.items())
+        for axis in axes[row]:
+            axis.axis("off")
+    figure.colorbar(
+        plt.cm.ScalarMappable(norm=TwoSlopeNorm(vmin=-symmetric_limit, vcenter=0, vmax=symmetric_limit), cmap="bwr"),
+        ax=axes[:, 0].tolist(), orientation="horizontal", shrink=0.85,
+        label=f"Raw AC ({unit_label}); separate affine baseline",
+    )
+    for column, descriptor in enumerate(top_descriptors, start=1):
+        raw_min, raw_max = descriptors[descriptor].agg(["min", "max"])
+        figure.colorbar(
+            plt.cm.ScalarMappable(norm=Normalize(vmin=raw_min, vmax=raw_max), cmap="gist_rainbow"),
+            ax=axes[:, column].tolist(), orientation="horizontal", shrink=0.85,
+            label=f"{descriptor_labels[descriptor]} · raw, dataset-wide scale",
+        )
+    return figure, pd.DataFrame(audit)
 
 
 def save_publication_figure(figure: Any, path: Path | str) -> Path:
