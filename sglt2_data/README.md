@@ -8,7 +8,7 @@
   neutral charge squared, and OpenFF LJ epsilon/sigma. This distribution reconstructs
   from their fixed numerical table; it does not recompute the physical calculations.
 - The R fold-0 AC table supports reconstruction without author-trained weights.
-  `notebooks_for_sglt2/01_training.ipynb` retains the selected model architecture, objective coefficients and
+  `notebooks_for_sglt2/01_training_R.ipynb` and `01_training_U.ipynb` retain the selected model architecture, objective coefficients and
   fixed per-fold gradient scales. Exact retraining values may depend on the runtime.
 - **FreeSolv (optional validation example):** the upstream v0.52 snapshot has 642 molecules. Keep its bundled
   [README](../test_sample/input_data/freesolv/README.md), [license](../test_sample/input_data/freesolv/LICENSE), and
