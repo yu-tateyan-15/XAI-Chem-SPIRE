@@ -12,13 +12,27 @@ Developed and tested using **Google Colab** and **macOS**. Dependency versions a
 
 ## Atom contributions and their interpretation
 
-An **atom contribution (AC)** is an atom's signed contribution to the model prediction. The atom contributions sum to the prediction together with a separate affine baseline. Red denotes positive contributions and blue negative contributions; both molecules below use the same raw scale.
+An **atom contribution (AC)** is an atom's signed contribution to the model prediction. ACs sum to the prediction together with a separate affine baseline. Red denotes positive contributions and blue negative contributions. Both examples use the same raw color scale (±0.35 pIC50; values beyond this range saturate). Map titles show **predicted** pIC50.
 
-![SGLT2 atom contributions: two validation molecules with predictions, observations, atom indices, and a shared color scale](assets/atom_contributions_sglt2.png)
+### Dapagliflozin vs. 1214
 
-*Existing regularized SGLT2 results (fold 0). These maps describe model evidence, not experimentally measured atomic effects.*
+Experimental pIC50: **8.89 vs. 5.05** (difference: 3.84).
 
-**Descriptor-based reconstruction** fits a simple surrogate to approximate the learned ACs from atom-level physicochemical descriptors. It helps describe which properties account for the model's evidence; it does not establish a causal mechanism.
+![Raw atom contributions for dapagliflozin and 1214, without atom indices](assets/ac_dapa_1214.png)
+
+**Descriptor-based reconstruction** approximates the learned ACs with atom-level physicochemical descriptors. Below, signed effects describe each descriptor's contribution to the reconstructed changed-region difference (**analog − dapagliflozin**); absolute shares show relative magnitudes, not percentages of experimental activity.
+
+![Descriptor effects and absolute shares for dapagliflozin to 1214](assets/descriptor_effect_dapa_1214.png)
+
+### Dapagliflozin vs. 1244
+
+Experimental pIC50: **8.89 vs. 4.59** (difference: 4.30). This example is a two-cut structural comparison rather than a strict single-cut MMP.
+
+![Raw atom contributions for dapagliflozin and 1244, without atom indices](assets/ac_dapa_1244.png)
+
+![Descriptor effects and absolute shares for dapagliflozin to 1244](assets/descriptor_effect_dapa_1244.png)
+
+*Existing regularized SGLT2 reference results (fold 0). Maps and surrogate effects describe model evidence, not experimentally measured atomic effects or causal mechanisms. Each descriptor-effect panel retains its original labeled axis range.*
 
 ## SGLT2 case study
 
