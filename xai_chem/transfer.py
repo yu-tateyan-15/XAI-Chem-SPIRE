@@ -9,13 +9,33 @@ import numpy as np
 import pandas as pd
 import torch
 from rdkit import Chem
-from rdkit.Chem import rdMolDescriptors, rdPartialCharges
 
 
-RDKit_DESCRIPTORS = (
-    "gasteiger_charge", "gasteiger_charge_square", "crippen_logp",
-    "crippen_molar_refractivity", "tpsa_A2", "atomic_mass", "total_hydrogens",
+# The same explicit-H-averaged descriptor definitions used in the SGLT2 paper.
+PAPER_DESCRIPTORS = (
+    "crest_boltzmann_weighted_displacement_A", "hessian_rmsf_A",
+    "fukui_plus_raw", "fukui_minus_raw", "neutral_charge_square",
+    "epsilon_kcal_mol", "sigma_angstrom",
 )
+
+
+def load_paper_atom_descriptors(path: Path, frame: pd.DataFrame) -> pd.DataFrame:
+    """Load computed MMP-endpoint descriptors in the dataset's SMILES atom order."""
+    atoms = pd.read_csv(path)
+    # Row IDs and exact SMILES identify the selected endpoints; atom symbols audit order.
+    for graph_id, rows in atoms.groupby("graph_id", sort=False):
+        source = frame.iloc[int(graph_id)]
+        molecule = Chem.MolFromSmiles(source["Smiles"])
+        ordered = rows.sort_values("atom_idx")
+        if not rows["smiles"].eq(source["Smiles"]).all() or not np.array_equal(
+            ordered["atom_idx"].to_numpy(), np.arange(molecule.GetNumAtoms())):
+            raise ValueError(f"Paper descriptor identity/coverage differs for row {graph_id}")
+        if ordered["atom_symbol"].tolist() != [a.GetSymbol() for a in molecule.GetAtoms()]:
+            raise ValueError(f"Paper descriptor atom order differs for row {graph_id}")
+    if not np.isfinite(atoms[list(PAPER_DESCRIPTORS)].to_numpy()).all():
+        raise ValueError("Paper descriptors contain nonfinite values")
+    atoms["molecule_id"] = atoms["graph_id"].map(frame["cid"])
+    return atoms
 
 
 def load_freesolv_snapshot(path: Path) -> pd.DataFrame:
@@ -74,34 +94,6 @@ def build_regression_mmp(
     table = pd.read_csv(output_csv).rename(columns={"pIC50_i": "target_i", "pIC50_j": "target_j"})
     table.to_csv(output_csv, index=False)
     return table
-
-
-def rdkit_atom_descriptors(frame: pd.DataFrame) -> pd.DataFrame:
-    """Calculate seven interpretable 2D descriptors independently of CheMeleon."""
-    # NOTE: CONTRACT graph_id is the zero-based frame row; preserve frame order.
-    # atom_idx is the SMILES index; map graph-indexed tables via smiles_to_graph_atom_index.
-    records = []
-    for row_idx, row in frame.iterrows():
-        mol = Chem.MolFromSmiles(row["Smiles"])
-        rdPartialCharges.ComputeGasteigerCharges(mol)
-        crippen = rdMolDescriptors._CalcCrippenContribs(mol)
-        tpsa = rdMolDescriptors._CalcTPSAContribs(mol)
-        for atom in mol.GetAtoms():
-            atom_idx = atom.GetIdx()
-            charge = float(atom.GetProp("_GasteigerCharge"))
-            records.append({
-                "graph_id": row_idx, "molecule_id": str(row["cid"]), "atom_idx": atom_idx,
-                "atom_symbol": atom.GetSymbol(), "smiles": row["Smiles"],
-                "gasteiger_charge": charge, "gasteiger_charge_square": charge ** 2,
-                "crippen_logp": crippen[atom_idx][0],
-                "crippen_molar_refractivity": crippen[atom_idx][1],
-                "tpsa_A2": tpsa[atom_idx], "atomic_mass": atom.GetMass(),
-                "total_hydrogens": atom.GetTotalNumHs(),
-            })
-    result = pd.DataFrame(records)
-    if not np.isfinite(result[list(RDKit_DESCRIPTORS)].to_numpy()).all():
-        raise ValueError("RDKit descriptors contain non-finite values")
-    return result
 
 
 def measure_ac_constraints(results, raw_dataset, mmp_path: Path, *, split: str) -> dict:

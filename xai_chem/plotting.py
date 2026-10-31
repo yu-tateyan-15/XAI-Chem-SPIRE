@@ -862,18 +862,18 @@ def plot_pair_descriptor_maps(
     """Show R ACs and two raw descriptors in a 2-molecule by 3-map panel.
 
     Descriptor halos cover only the changed-region atoms used by the surrogate.
-    Each descriptor uses its full-dataset raw range for both molecules, with the
+    Each descriptor uses its supplied-table raw range for both molecules, with the
     established gist_rainbow palette; raw values are never centered or rescaled.
     """
     # NOTE: caller supplies two endpoints and two descriptors, ordered by |B-A effect|.
     descriptor_labels = {
-        "gasteiger_charge": "Gasteiger charge (e)",
-        "gasteiger_charge_square": "Gasteiger charge² (e²)",
-        "crippen_logp": "Crippen logP contribution",
-        "crippen_molar_refractivity": "Crippen molar refractivity",
-        "tpsa_A2": "TPSA contribution (Å²)",
-        "atomic_mass": "Atomic mass (Da)",
-        "total_hydrogens": "Attached H count",
+        "crest_boltzmann_weighted_displacement_A": "Boltzmann CREST displacement (Å)",
+        "hessian_rmsf_A": "Hessian RMSF (Å)",
+        "fukui_plus_raw": "Fukui f⁺ (net-charge sign)",
+        "fukui_minus_raw": "Fukui f⁻ (net-charge sign)",
+        "neutral_charge_square": "AIMNet2-NSE neutral charge² (e²)",
+        "epsilon_kcal_mol": "OpenFF LJ ε (kcal/mol)",
+        "sigma_angstrom": "OpenFF LJ σ (Å)",
     }
     figure, axes = plt.subplots(2, 3, figsize=(16, 9.2), layout="constrained")
     audit = []
@@ -913,7 +913,7 @@ def plot_pair_descriptor_maps(
                 "source_row_index": int(source_row), "descriptor": descriptor,
                 "atom_idx": int(i), "raw_value": float(value),
                 "global_raw_min": float(raw_min), "global_raw_max": float(raw_max),
-                "scale_scope": "all_dataset_atoms", "atom_indices_displayed": False,
+                "scale_scope": "supplied_descriptor_atoms", "atom_indices_displayed": False,
                 "raw_values_transformed": False,
                 "color_saturated": bool(value < raw_min or value > raw_max),
             } for i, value in values.items())
@@ -929,7 +929,7 @@ def plot_pair_descriptor_maps(
         figure.colorbar(
             plt.cm.ScalarMappable(norm=Normalize(vmin=raw_min, vmax=raw_max), cmap="gist_rainbow"),
             ax=axes[:, column].tolist(), orientation="horizontal", shrink=0.85,
-            label=f"{descriptor_labels[descriptor]} · raw, dataset-wide scale",
+            label=f"{descriptor_labels[descriptor]}\nRaw; shared across supplied endpoints",
         )
     return figure, pd.DataFrame(audit)
 

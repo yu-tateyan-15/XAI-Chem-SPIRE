@@ -22,6 +22,7 @@
   and retains 2,048-dimensional atom states. Encoder weights are not redistributed.
 
 ACs are additive prediction terms with a separate affine baseline. Ridge fidelity
-is in-sample reconstruction, not a causal atomic effect. FreeSolv and LD50 use seven separate
-RDKit descriptors and three MMPs selected by structure size before fitting.
+is in-sample reconstruction, not a causal atomic effect. Additional examples use the
+same seven physicochemical descriptor definitions on three selected validation MMPs
+per task, ranked by experimental target gap after descriptor-coverage checks.
 These examples verify the workflow on other endpoints; they do not validate toxicity classification.

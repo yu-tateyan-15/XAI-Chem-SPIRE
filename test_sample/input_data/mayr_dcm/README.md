@@ -3,8 +3,9 @@
 Source: [BNNLab_Mayr_GAS_SET_DCM](https://github.com/BNNLab/Nucleophilicity).
 [Original file](https://raw.githubusercontent.com/BNNLab/Nucleophilicity/main/GAS_SET_16_Descriptors.csv), accessed 2026-10-24.
 Target: Mayr N (DCM); copied without an additional transform.
-The 904-row source has 372 DCM observations. B/Si are retained; 19 Sn/Ge-containing
-structures lack finite Gasteiger descriptors in this example. The resulting set has 353 molecules.
+The 904-row source has 372 DCM observations. The original training filter retains
+B/Si and excludes 19 Sn/Ge-containing structures, leaving 353 molecules.
+The three reconstruction examples use endpoints with complete OpenFF Sage assignments.
 Data accompany “Predicting Solvent-Dependent Nucleophilicity Parameter with a Causal
 Structure Property Relationship”; [archived release](https://doi.org/10.5281/zenodo.4705840).
 The notebook downloads the unchanged source to its `output/` run directory,
