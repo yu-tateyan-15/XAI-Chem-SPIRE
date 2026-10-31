@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from typing import Sequence
 from scipy.stats import pearsonr, spearmanr
 from sklearn.linear_model import Ridge
-from sklearn.preprocessing import SplineTransformer, StandardScaler
+from sklearn.preprocessing import StandardScaler
 import json
 from typing import Mapping, Sequence
 
@@ -72,16 +72,6 @@ def align_descriptors_to_dataset(
         if observed != expected:
             raise ValueError(f"Descriptor atom order disagrees with dataset SMILES: {smiles}")
     return aligned
-
-
-DESCRIPTORS: list[str] = [
-    "fukui_index_plus",
-    "fukui_index_minus",
-    "hessian_rmsf",
-    "crest_displacement",
-    "LJ_pot_epsilon",
-    "LJ_pot_sigma",
-]
 
 
 def _atom_scope_datasets_exact_index_series(
@@ -230,127 +220,14 @@ def _metric_row(observed: np.ndarray, predicted: np.ndarray, level: str) -> dict
     }
 
 
-def _within_endpoint_mixup(
-    x: np.ndarray,
-    y: np.ndarray,
-    endpoints: np.ndarray,
-    *,
-    multiplier: int,
-    alpha: float,
-    random_seed: int,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Append convex mixtures of atoms sampled within the same endpoint."""
-
-    if multiplier < 0:
-        raise ValueError("augmentation_multiplier must be non-negative.")
-    if multiplier == 0:
-        return x, y, endpoints
-    if alpha <= 0.0:
-        raise ValueError("mixup_alpha must be positive when augmentation is enabled.")
-
-    rng = np.random.default_rng(int(random_seed))
-    x_parts = [x]
-    y_parts = [y]
-    endpoint_parts = [endpoints]
-    for endpoint in np.unique(endpoints):
-        indices = np.flatnonzero(endpoints == endpoint)
-        if len(indices) < 2:
-            continue
-        n_augmented = int(multiplier) * len(indices)
-        left = rng.choice(indices, size=n_augmented, replace=True)
-        right = rng.choice(indices, size=n_augmented, replace=True)
-        same = left == right
-        while same.any():
-            right[same] = rng.choice(indices, size=int(same.sum()), replace=True)
-            same = left == right
-        weight = rng.beta(float(alpha), float(alpha), size=n_augmented)
-        x_parts.append(weight[:, None] * x[left] + (1.0 - weight[:, None]) * x[right])
-        y_parts.append(weight * y[left] + (1.0 - weight) * y[right])
-        endpoint_parts.append(np.full(n_augmented, endpoint, dtype=endpoints.dtype))
-    return np.vstack(x_parts), np.concatenate(y_parts), np.concatenate(endpoint_parts)
-
-
-def _fit_spline_gam(
-    x_reference: np.ndarray,
-    x_train: np.ndarray,
-    y_train: np.ndarray,
-    *,
-    alpha: float,
-    n_knots: int,
-    spline_degree: int,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Fit centered univariate spline terms and return reference-row effects."""
-
-    if n_knots < 2:
-        raise ValueError("gam_n_knots must be at least 2.")
-    if spline_degree < 1:
-        raise ValueError("gam_spline_degree must be at least 1.")
-
-    reference_blocks: list[np.ndarray] = []
-    training_blocks: list[np.ndarray] = []
-    feature_slices: list[slice] = []
-    basis_counts: list[int] = []
-    start = 0
-    for feature_index in range(x_reference.shape[1]):
-        reference_column = x_reference[:, [feature_index]]
-        training_column = x_train[:, [feature_index]]
-        if np.ptp(reference_column) < 1.0e-12:
-            reference_basis = np.zeros((len(x_reference), 1), dtype=float)
-            training_basis = np.zeros((len(x_train), 1), dtype=float)
-        else:
-            effective_knots = min(int(n_knots), int(np.unique(reference_column).size))
-            transformer = SplineTransformer(
-                n_knots=max(2, effective_knots),
-                degree=int(spline_degree),
-                knots="uniform",
-                include_bias=False,
-                extrapolation="constant",
-            ).fit(reference_column)
-            raw_reference_basis = transformer.transform(reference_column)
-            basis_mean = raw_reference_basis.mean(axis=0)
-            basis_scale = raw_reference_basis.std(axis=0)
-            basis_scale[basis_scale < 1.0e-12] = 1.0
-            reference_basis = (raw_reference_basis - basis_mean) / basis_scale
-            training_basis = (transformer.transform(training_column) - basis_mean) / basis_scale
-        stop = start + reference_basis.shape[1]
-        reference_blocks.append(reference_basis)
-        training_blocks.append(training_basis)
-        feature_slices.append(slice(start, stop))
-        basis_counts.append(reference_basis.shape[1])
-        start = stop
-
-    reference_design = np.column_stack(reference_blocks)
-    training_design = np.column_stack(training_blocks)
-    model = Ridge(alpha=float(alpha), fit_intercept=False)
-    model.fit(training_design, y_train)
-    coefficients = np.ravel(model.coef_)
-    effects = np.column_stack(
-        [
-            reference_design[:, feature_slice] @ coefficients[feature_slice]
-            for feature_slice in feature_slices
-        ]
-    )
-    coefficient_l2 = np.asarray(
-        [np.linalg.norm(coefficients[feature_slice]) for feature_slice in feature_slices],
-        dtype=float,
-    )
-    return effects, np.asarray(basis_counts, dtype=int), coefficient_l2
-
-
 def fit_pair(
     pair: pd.Series,
     atom_rows: pd.DataFrame,
     *,
     alpha: float = 1.0,
-    features: Sequence[str] = DESCRIPTORS,
-    model_kind: str = "ridge",
-    gam_n_knots: int = 4,
-    gam_spline_degree: int = 3,
-    augmentation_multiplier: int = 0,
-    mixup_alpha: float = 0.5,
-    augmentation_seed: int = 20260717,
+    features: Sequence[str],
 ) -> PairFitResult:
-    """Fit a pair-specific Ridge or spline GAM with exact descriptor effects."""
+    """Fit pair-specific Ridge with explicitly selected descriptor effects."""
 
     features = tuple(features)
     if "delta_n_diff_atoms" in features:
@@ -377,43 +254,14 @@ def fit_pair(
         y_scale = 1.0
     if alpha < 0.0:
         raise ValueError("alpha must be non-negative.")
-    normalized_model_kind = str(model_kind).lower()
-    if normalized_model_kind not in {"ridge", "gam"}:
-        raise ValueError("model_kind must be 'ridge' or 'gam'.")
-
     y_scaled = (y - y_mean) / y_scale
-    endpoints = data["endpoint"].to_numpy(dtype=str)
-    x_train, y_train, training_endpoints = _within_endpoint_mixup(
-        x_scaled,
-        y_scaled,
-        endpoints,
-        multiplier=int(augmentation_multiplier),
-        alpha=float(mixup_alpha),
-        random_seed=int(augmentation_seed),
-    )
-    if len(y_train) > len(y):
-        augmentation_method = "within_endpoint_mixup"
-    elif int(augmentation_multiplier) > 0:
-        augmentation_method = "not_applied_insufficient_endpoint_atoms"
-    else:
-        augmentation_method = "none"
-    if normalized_model_kind == "ridge":
-        model = Ridge(alpha=float(alpha), fit_intercept=False)
-        model.fit(x_train, y_train)
-        standardized_coefficients = np.ravel(model.coef_)
-        effects_scaled = x_scaled * standardized_coefficients
-        basis_counts = np.ones(len(features), dtype=int)
-        coefficient_l2_scaled = np.abs(standardized_coefficients)
-    else:
-        effects_scaled, basis_counts, coefficient_l2_scaled = _fit_spline_gam(
-            x_scaled,
-            x_train,
-            y_train,
-            alpha=float(alpha),
-            n_knots=int(gam_n_knots),
-            spline_degree=int(gam_spline_degree),
-        )
-        standardized_coefficients = np.full(len(features), np.nan)
+    # Fit original atom rows in pair-standardized X/y space; restore raw AC below.
+    model = Ridge(alpha=float(alpha), fit_intercept=False)
+    model.fit(x_scaled, y_scaled)
+    standardized_coefficients = np.ravel(model.coef_)
+    effects_scaled = x_scaled * standardized_coefficients
+    basis_counts = np.ones(len(features), dtype=int)
+    coefficient_l2_scaled = np.abs(standardized_coefficients)
 
     effects = effects_scaled * y_scale
     prediction = y_mean + effects.sum(axis=1)
@@ -475,16 +323,15 @@ def fit_pair(
     metrics = pd.DataFrame.from_records(metric_rows)
     metrics.insert(0, "pair_id", int(pair["pair_id"]))
     metrics.insert(0, "context_id", str(pair["context_id"]))
-    metrics["model_kind"] = normalized_model_kind
+    metrics["model_kind"] = "ridge"
     metrics["alpha"] = float(alpha)
-    metrics["augmentation_method"] = augmentation_method
     metrics["n_original_atoms"] = len(data)
-    metrics["n_training_rows"] = len(y_train)
+    metrics["n_training_rows"] = len(y)
 
     coefficients = pd.DataFrame(
         {
             "descriptor": list(features),
-            "model_kind": normalized_model_kind,
+            "model_kind": "ridge",
             "n_basis": basis_counts,
             "ridge_coefficient_scaled_y": standardized_coefficients,
             "effect_per_descriptor_sd": standardized_coefficients * y_scale,
@@ -533,18 +380,10 @@ def fit_pair(
     )
     scaling["target_pair_mean"] = y_mean
     scaling["target_pair_sd"] = y_scale
-    scaling["model_kind"] = normalized_model_kind
+    scaling["model_kind"] = "ridge"
     scaling["alpha"] = float(alpha)
-    scaling["gam_n_knots"] = int(gam_n_knots) if normalized_model_kind == "gam" else np.nan
-    scaling["gam_spline_degree"] = (
-        int(gam_spline_degree) if normalized_model_kind == "gam" else np.nan
-    )
-    scaling["augmentation_method"] = augmentation_method
-    scaling["augmentation_multiplier"] = int(augmentation_multiplier)
-    scaling["mixup_alpha"] = float(mixup_alpha) if int(augmentation_multiplier) > 0 else np.nan
-    scaling["augmentation_seed"] = int(augmentation_seed) if int(augmentation_multiplier) > 0 else np.nan
     scaling["n_original_atoms"] = len(data)
-    scaling["n_training_rows"] = len(training_endpoints)
+    scaling["n_training_rows"] = len(y)
     return PairFitResult(
         pair=pair,
         atoms=data.reset_index(drop=True),
@@ -626,7 +465,7 @@ def load_mmp_inputs(
     dataset_path: Path,
     teacher_path: Path,
     teacher_fold: int | None = None,
-    descriptor_columns: Sequence[str] = DESCRIPTORS,
+    descriptor_columns: Sequence[str],
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Load canonical MMP rows and the frozen descriptor/teacher atom table.
 
@@ -702,7 +541,7 @@ def audit_pair_coverage(
     mmp: pd.DataFrame,
     atoms: pd.DataFrame,
     *,
-    descriptors: Sequence[str] = DESCRIPTORS,
+    descriptors: Sequence[str],
 ) -> pd.DataFrame:
     """Return one coverage/status row for every canonical MMP."""
 
@@ -815,13 +654,9 @@ def fit_all_mmp_pairs(
     *,
     variants: Mapping[str, Mapping[str, object]],
     primary_variant: str = "ridge",
-    descriptors: Sequence[str] = DESCRIPTORS,
+    descriptors: Sequence[str],
 ) -> AllMmpFitResult:
-    """Fit every eligible MMP with the requested descriptor set.
-
-    The default preserves the six-descriptor primary analysis; ablations pass
-    an explicit subset without changing the atom table or teacher values.
-    """
+    """Fit every eligible MMP with the explicitly selected descriptor set."""
 
     if primary_variant not in variants:
         raise ValueError(f"primary_variant={primary_variant!r} is absent from variants.")
@@ -871,7 +706,6 @@ def fit_all_mmp_pairs(
                     "molecule_B": str(pair["molecule_2_id"]),
                     "variant": str(variant),
                     "model_kind": str(atom_metric["model_kind"]),
-                    "augmentation_method": str(atom_metric["augmentation_method"]),
                     "n_original_atoms": int(atom_metric["n_original_atoms"]),
                     "n_training_rows": int(atom_metric["n_training_rows"]),
                     "atom_r2_in_sample": float(atom_metric["r2"]),
