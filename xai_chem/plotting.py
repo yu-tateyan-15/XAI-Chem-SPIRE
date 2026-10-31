@@ -852,7 +852,6 @@ def plot_mmp_condition_comparison(
 def plot_pair_descriptor_maps(
     results: CompletedFoldResults,
     descriptors: pd.DataFrame,
-    fitted_atoms: pd.DataFrame,
     *,
     source_rows: Sequence[int],
     top_descriptors: Sequence[str],
@@ -861,7 +860,7 @@ def plot_pair_descriptor_maps(
 ) -> tuple[Any, pd.DataFrame]:
     """Show R ACs and two raw descriptors in a 2-molecule by 3-map panel.
 
-    Descriptor halos cover only the changed-region atoms used by the surrogate.
+    Descriptor halos cover every heavy atom, including the shared MMP core.
     Each descriptor uses its supplied-table raw range for both molecules, with the
     established gist_rainbow palette; raw values are never centered or rescaled.
     """
@@ -891,7 +890,7 @@ def plot_pair_descriptor_maps(
         for column, descriptor in enumerate(top_descriptors, start=1):
             raw_min, raw_max = descriptors[descriptor].agg(["min", "max"])
             normalizer = Normalize(vmin=raw_min, vmax=raw_max, clip=True)
-            rows = fitted_atoms.loc[fitted_atoms["graph_id"].eq(source_row)].sort_values("atom_idx")
+            rows = descriptors.loc[descriptors["graph_id"].eq(source_row)].sort_values("atom_idx")
             values = rows.set_index("atom_idx")[descriptor]
             cmap = plt.get_cmap("gist_rainbow")
             # Same-radius atom halos reproduce the project's raw-descriptor style.
@@ -908,12 +907,13 @@ def plot_pair_descriptor_maps(
             )
             drawer.FinishDrawing()
             axes[row, column].imshow(decode_and_trim_png(drawer.GetDrawingText(), white_threshold=0.996, pad_px=1))
-            axes[row, column].set_title(f"{'AB'[row]} · {descriptor_labels[descriptor]}\nChanged-region atoms only", fontsize=10)
+            axes[row, column].set_title(f"{'AB'[row]} · {descriptor_labels[descriptor]}\nAll heavy atoms", fontsize=10)
             audit.extend({
                 "source_row_index": int(source_row), "descriptor": descriptor,
                 "atom_idx": int(i), "raw_value": float(value),
                 "global_raw_min": float(raw_min), "global_raw_max": float(raw_max),
                 "scale_scope": "supplied_descriptor_atoms", "atom_indices_displayed": False,
+                "mapping_scope": "all_heavy_atoms",
                 "raw_values_transformed": False,
                 "color_saturated": bool(value < raw_min or value > raw_max),
             } for i, value in values.items())
